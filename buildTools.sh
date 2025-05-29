@@ -14,11 +14,11 @@ testToolsDir="testTools"
 mkdir -p $testToolsDir
 
 for tool in "${basicTools[@]}"; do
-    gcc -O2 -lpcap $tool -o ${tool%.c}
+    gcc -O2 -lpcap $tool -o $testToolsDir/${tool%.c}
     chmod +x $testToolsDir/${tool%.c}
 done
 
 for tool in "${fuzzerTools[@]}"; do
-    clang -O2 -fsanitize=fuzzer $tool -o ${tool%.c}
+    clang -O2 -fsanitize=fuzzer $tool -o $testToolsDir/${tool%.c}
     chmod +x $testToolsDir/${tool%.c}
 done
