@@ -6,6 +6,7 @@ basicTools=(
 
 fuzzerTools=(
     fuzzerBlackbox.c
+    fuzzerBlackboxWindows.c
 )
 
 testToolsDir="testTools"
