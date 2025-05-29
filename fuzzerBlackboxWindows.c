@@ -59,7 +59,7 @@ __attribute__((no_sanitize("address"))) int checkServerUp() {
     validResponse = 0;
   }
   if (validResponse == 1) {
-    // printf("Bind Successfull\n");
+    printf("Bind Successful - 1\n");
   } else {
     // printf("Bind Failed\n");
   }
@@ -75,7 +75,7 @@ int LLVMFuzzerInitialize(int *argc, char ***argv) {
     fprintf(stderr, "Waiting for server to start\n");
     sleep(1);
   }
-  printf("Bind Successfull\n");
+  printf("Bind Successfull - 2\n");
   return 0;
 }
 
@@ -125,7 +125,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
       //   size_t recievedBytes = recv(sockfd, recieve, 60000, 0);
     }
     if (save_fuzz_input == 0) {
-      char pathToTestCaseLog = "/home/admin/software/fuzzing/389-ds-test/";
+      char pathToTestCaseLog[47] = "/home/mburket/code/389_corpus_testing/caselog/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
       // fprintf(testCases, "Fuzzer Data \n ");
       if (Data[0] == 1) {
