@@ -19,6 +19,6 @@ for tool in "${basicTools[@]}"; do
 done
 
 for tool in "${fuzzerTools[@]}"; do
-    clang -O2 -fsanitize=fuzzer $tool -o $testToolsDir/${tool%.c}
+    clang -O2 -fsanitize=fuzzer $tool -o $testToolsDir/${tool%.c} -g -fno-omit-frame-pointer -fsanitize=address
     chmod +x $testToolsDir/${tool%.c}
 done
