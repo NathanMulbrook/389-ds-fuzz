@@ -29,8 +29,6 @@ char bindResponse[22] = {0x30, 0x84, 0x0,  0x0, 0x0, 0x10, 0x2, 0x1,
 char *ip = "10.140.200.70";
 int port = 389;
 
-void saveCurrentInput() { save_fuzz_input = 1; }
-
 __attribute__((no_sanitize("address"))) int checkServerUp() {
 
   int validResponse = 0;
@@ -48,8 +46,12 @@ __attribute__((no_sanitize("address"))) int checkServerUp() {
   char recieve[2000];
   validResponse = 1;
   size_t recievedBytes = recv(sockfd, recieve, 2000, 0);
+  if (recievedBytes < bindResponseLength) {
+       printf("Error: Received bytes less than expected\n");
+       return 0; // or handle this case as needed
+   }
   if (recievedBytes == bindResponseLength) {
-    for (int i = 0; i == bindResponseLength; i++) {
+    for (int i = 0; i < bindResponseLength; i++) {
       if (recieve[i] != bindResponse[i]) {
         validResponse = 0;
         break;
@@ -90,7 +92,7 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
     int sockfd;
     int one = 1;
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    server_addr.sin_family = AF_INET6;
+    server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(port);
     inet_pton(AF_INET, ip, &server_addr.sin_addr);
     setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
@@ -111,10 +113,11 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
         validResponse = 0;
       }
       if (validResponse == 1) {
-        // printf("Bind Successfull\n");
+      // printf("Bind Successfull - send\n");
       } else {
-        return 1;
-        // printf("Bind Failed\n");
+        printf("Bind Failed %010ld:%06ld - Bind was attempted\n", now.tv_sec,
+                now.tv_usec);
+	return 1;
       }
     }
     if (Size >= 2) {
@@ -124,9 +127,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
       //   char recieve[60000];
       //   size_t recievedBytes = recv(sockfd, recieve, 60000, 0);
     }
-    if (save_fuzz_input == 0) {
-      char pathToTestCaseLog[47] = "/home/mburket/code/389_corpus_testing/caselog/";
+    if (save_fuzz_input == 1) {
+      char pathToTestCaseLog[46] = "/home/mburket/code/389_corpus_testing/caselog/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
+      if (testCases == NULL) {
+	      printf("file didn't open");
+	      exit(1);
+	}
       // fprintf(testCases, "Fuzzer Data \n ");
       if (Data[0] == 1) {
         fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec,
@@ -143,9 +150,9 @@ int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
       fprintf(testCases, "\n");
       fclose(testCases);
     }
-    usleep(10000);
+    usleep(5000);
     close(sockfd);
-    usleep(1850);
+    usleep(925);
   }
 
   return 1;
