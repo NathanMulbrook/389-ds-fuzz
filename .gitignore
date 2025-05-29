@@ -16,8 +16,12 @@ run*/
 logs/
 crash-*
 389-ds-base/
+389-ds-patches/
+389-ds-private/
+tools/
 *.log
 *.pcap
 logs1/
 *.profraw
-
+a.out
+.vscode/

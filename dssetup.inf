@@ -1,0 +1,20 @@
+[general]
+config_version = 2
+full_machine_name = localhost.localdomain
+selinux = False
+start = True
+
+
+
+[backend-userroot]
+sample_entries = yes
+suffix = dc=example,dc=com
+
+[slapd]
+instance_name = test-instance
+port = 5555
+secure_port = 6667
+root_dn = cn=directory manager
+root_password = secRet_passWord
+user = admin
+group = admin

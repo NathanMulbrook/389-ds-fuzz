@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-
+# 
 mkdir coverage
 cd coverage
 rm default.profdata

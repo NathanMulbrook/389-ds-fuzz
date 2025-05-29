@@ -1,4 +1,3 @@
-#include "fuzzer.h"
 #include <arpa/inet.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
@@ -64,8 +63,18 @@ __attribute__((no_sanitize("address"))) int checkServerUp() {
   return (validResponse);
 }
 
-__attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
-                                                       size_t Size) {
+int LLVMFuzzerInitialize(int *argc, char ***argv) {
+  int validResponse = 0;
+  while (validResponse == 0) {
+    validResponse = checkServerUp();
+    fprintf(stderr, "Waiting for server to start\n");
+    sleep(1);
+  }
+  printf("Bind Successfull\n");
+  return 0;
+}
+
+int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
   struct timeval now;
   gettimeofday(&now, NULL);
 
@@ -113,9 +122,10 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
     if (save_fuzz_input == 0) {
       char pathToTestCaseLog = "/home/admin/software/fuzzing/389ds-test/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
-      //fprintf(testCases, "Fuzzer Data \n ");
+      // fprintf(testCases, "Fuzzer Data \n ");
       if (Data[0] == 1) {
-        fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec, now.tv_usec);
+        fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec,
+                now.tv_usec);
 
         //   if (validResponse == 1) {
         //     fprintf(testCases, "Bind was successfull\n");
@@ -128,7 +138,7 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
       fprintf(testCases, "\n");
       fclose(testCases);
     }
-    usleep(20000);
+    usleep(10000);
     close(sockfd);
     usleep(1850);
   }
@@ -136,38 +146,3 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
   return 1;
 }
 
-// char *arg_array[] = {"0", "corpus", "-max_len=60000", "-len_control=30",
-// "-use_value_profile=1", "-dict=dict.txt", NULL};
-
-// char **args_ptr = &arg_array[0];
-// int args_size = 6;
-
-char *arg_array[] = {
-    "0",
-    "/home/admin/software/fuzzing/389ds-test/389ds-fuzz/corpus",
-    "-max_len=65000",
-    "-detect_leaks=0",
-    "-len_control=20",
-    "-rss_limit_mb=20530",
-    NULL};
-
-char **args_ptr = &arg_array[0];
-int args_size = 6;
-
-__attribute__((no_sanitize("address"))) void *launchFuzzer2(void *param) {
-  int validResponse = 0;
-  while (validResponse == 0) {
-    validResponse = checkServerUp();
-    fprintf(stderr, "Waiting for server to start\n");
-    sleep(1);
-  }
-  printf("Bind Successfull\n");
-
-  LLVMFuzzerRunDriver(&args_size, &args_ptr, &fuzzServer);
-}
-
-void launchFuzzer() {
-  pthread_t threadID;
-  pthread_create(&threadID, NULL, launchFuzzer2, NULL);
-  fprintf(stderr, "fuzzing launched\n");
-}
