@@ -19,6 +19,7 @@ crash-*
 389-ds-patches/
 389-ds-private/
 tools/
+testTools/
 *.log
 *.pcap
 logs1/
