@@ -98,6 +98,7 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
       }
       if (validResponse == 1) {
         // printf("Bind Successfull\n");
+        send(sockfd, &Data[1], Size - 1, 0);
       } else {
         return 1;
         // printf("Bind Failed\n");
@@ -113,9 +114,10 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
     if (save_fuzz_input == 0) {
       char pathToTestCaseLog = "/home/admin/software/fuzzing/389ds-test/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
-      //fprintf(testCases, "Fuzzer Data \n ");
+      // fprintf(testCases, "Fuzzer Data \n ");
       if (Data[0] == 1) {
-        fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec, now.tv_usec);
+        fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec,
+                now.tv_usec);
 
         //   if (validResponse == 1) {
         //     fprintf(testCases, "Bind was successfull\n");
