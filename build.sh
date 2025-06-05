@@ -19,7 +19,8 @@ REBUILD_DIRECTORY=0
 JOBS=1 #setting 1 often causes build fails
 PATCHBRANCH="master"
 PRIVATEBRANCH="master"
-A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
+#A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
+A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
 PATCHDIRS=(
     "389-ds-patches/patches"
     "389-ds-private/patches"
