@@ -2,8 +2,8 @@
 set -e
 
 SRC="testFuzzer.c"
-OBJ="testFuzzer.o"
-OUT="testFuzzer"
+OBJ="testTools/testFuzzer.o"
+OUT="testTools/testFuzzer"
 FUZZER_NO_MAIN_A="/usr/lib/clang/17/lib/x86_64-redhat-linux-gnu/libclang_rt.fuzzer_no_main.a"  # Adjust path as needed
 
 # Compile with fuzzer-no-link
