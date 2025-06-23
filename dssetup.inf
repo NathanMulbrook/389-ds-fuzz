@@ -1,3 +1,5 @@
+;389-ds-base/ldap/admin/src/defaults.inf.in
+
 [general]
 config_version = 2
 full_machine_name = localhost.localdomain

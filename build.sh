@@ -20,7 +20,10 @@ JOBS=1 #setting 1 often causes build fails
 PATCHBRANCH="master"
 PRIVATEBRANCH="master"
 #A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
-A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
+#A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.6
+#A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
+A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.8
+
 PATCHDIRS=(
     "389-ds-patches/patches"
     "389-ds-private/patches"
@@ -29,9 +32,9 @@ PATCHDIRS=(
 directory="$(pwd)"
 source_dir="$directory/389-ds-base"
 
-export CFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4  -m64 -mtune=generic  -fsanitize-recover=all'
-export CXXFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4 -m64 -mtune=generic  -fsanitize-recover=all'
-export config_flags_default="--enable-asan --enable-ubsan --enable-rust --enable-clang"
+export CFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -Wno-everything -ferror-limit=0  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4  -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
+export CXXFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -Wno-implicit-function-declaration -Wno-everything -ferror-limit=0  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4 -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
+export config_flags_default="--enable-asan --enable-ubsan --enable-rust --enable-clang --disable-dependency-tracking"
 
 #Configs for the differnt builds
 config_build() {
@@ -143,14 +146,14 @@ build_software() {
     port=$(($BUILD_CONFIG + 5600))
     portsec=$(($BUILD_CONFIG + 5700))
 
-    rm "$run_dir/sbin/ns-slapd"
+    rm "$run_dir/sbin/ns-slapd" || (build_failed)
     pkill -9 -f "run_$BUILD_CONFIG/sbin/ns-slapd"
     if [ ${BUILD_DIRECTORY} = 1 ]; then
-        rm -rf "$run_dir"
+        rm -rf "$run_dir" || (build_failed)
     fi
     if [ ${REBUILD_DIRECTORY} = 0 ]; then
-        rm -rf "$build_dir"
-        rm -rf "$temp_source_dir"
+        rm -rf "$build_dir" || (build_failed)
+        rm -rf "$temp_source_dir" || (build_failed)
     fi
 
     mkdir -p "$temp_source_dir"
@@ -158,7 +161,6 @@ build_software() {
     mkdir -p "$directory/run"
     mkdir -p "$run_dir"
     mkdir -p "$run_dir/sbin"
-    mkdir -p "$run_dir/sbin/corpus"
     mkdir -p "$directory/corpus"
 
     if [ ${REBUILD_DIRECTORY} = 0 ]; then
@@ -194,7 +196,7 @@ build_software() {
     if [ $? -ne 0 ] && [ $JOBS = 1 ]; then
         echo "########### make failed, retrying ###########"
         cd "$directory" || build_failed
-        ./build.sh $@
+        #./build.sh $@
         exit
     fi
     if [ $JOBS -ne 1 ]; then
@@ -211,12 +213,13 @@ build_software() {
         echo "ldapi = $run_dir/run/slapd-{instance_name}.socket" >>"$run_dir"/dssetup.inf
         echo "pid_file = $run_dir/run/dirsrv/slapd-{instance_name}.pid" >>"$run_dir"/dssetup.inf
         echo "tmp_dir =  /tmp/slapd_${BUILD_CONFIG}" >>"$run_dir"/dssetup.inf
+        echo "db_home_dir = /dev/shm/slapd-${BUILD_CONFIG}" >>"$run_dir"/dssetup.inf
 
         sed -i s/admin/$(whoami)/g "$run_dir"/dssetup.inf
         sed -i s/5555/$port/g "$run_dir"/dssetup.inf
         sed -i s/6667/$portsec/g "$run_dir"/dssetup.inf
 
-        PYTHONPATH="$PYTHONPATH:$temp_source_dir/src/lib389" PREFIX="$run_dir/" "$temp_source_dir"/src/lib389/cli/dscreate from-file "$run_dir"/dssetup.inf
+        PYTHONPATH="$PYTHONPATH:$temp_source_dir/src/lib389" PREFIX="$run_dir/" ASAN_OPTIONS="log_path=/home/admin/software/fuzzing/389ds-test/389-ds-fuzz/logs/asan$BUILD_CONFIG.log:halt_on_error=0" UBSAN_OPTIONS="halt_on_error=0" LSAN_OPTIONS="detect_leaks=0" "$temp_source_dir"/src/lib389/cli/dscreate -v from-file "$run_dir"/dssetup.inf
         if [ $? -ne 0 ]; then
             cd "$directory" || build_failed
             echo "########### dscreate failed, retrying ###########"
@@ -296,8 +299,9 @@ git checkout $PRIVATEBRANCH || build_failed
 cd "$directory" || build_failed
 
 if [ "$CONFIG" = "a" ] || [ "$CONFIG" = "all" ]; then
+    logrotate --force run/logrotate.conf -s logs/old/logrotate.status
     for BUILD_CONFIG in {1..20}; do
-        ./build.sh -c=$BUILD_CONFIG $@ &
+        ./build.sh -c=$BUILD_CONFIG $@ make 2>&1 | tee $directory/logs/build$BUILD_CONFIG.log &
         fuzzerpids+=($!)
         sleep 0.1
     done
