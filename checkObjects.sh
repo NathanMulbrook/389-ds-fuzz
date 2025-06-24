@@ -7,8 +7,19 @@ DIR="./build/build_1"
 OUTDIR="./logs"
 REPORT_FILE="${OUTDIR}/symbolReport.txt"
 
-# Symbols to check for (edit as needed)
-REQUIRED_SYMBOLS=("asan" "sancov" "sanitizer_cov" "covrec" "ubsan")
+# Symbols to check for: label=regex
+declare -A REQUIRED_SYMBOLS=(
+    [asan]="(_)?asan"
+    [sancov]="(_)?sancov"
+    [sanitizer_cov]="(_)?sanitizer_cov"
+    [covrec]="(_)?covrec"
+    [ubsan]="(_)?ubsan"
+)
+
+# Symbols that should NOT be found: label=regex
+declare -A FORBIDDEN_SYMBOLS=(
+    [fortified_source]="_chk$"  #fortify source can be bad for fuzzing
+)
 
 # Exclude patterns (files or directories, edit as needed)
 EXCLUDES=("debug/incremental" "exclude_file.o")
@@ -17,6 +28,7 @@ EXCLUDES=("debug/incremental" "exclude_file.o")
 FAILED_REPORT=$(mktemp)
 PASSED_REPORT=$(mktemp)
 MISSING_SYMBOL_COUNTS_FILE=$(mktemp)
+FORBIDDEN_SYMBOL_COUNTS_FILE=$(mktemp)
 
 # Count totals for summary
 TOTAL_FILES=0
@@ -28,8 +40,12 @@ rm -f "$REPORT_FILE"
 
 # Initialize counters for each symbol
 declare -A MISSING_SYMBOL_COUNTS
-for sym in "${REQUIRED_SYMBOLS[@]}"; do
+declare -A FORBIDDEN_SYMBOL_COUNTS
+for sym in "${!REQUIRED_SYMBOLS[@]}"; do
     MISSING_SYMBOL_COUNTS[$sym]=0
+done
+for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+    FORBIDDEN_SYMBOL_COUNTS[$sym]=0
 done
 
 # Build find exclude arguments
@@ -49,23 +65,41 @@ TOTAL_FILES=${#FILES_LIST[@]}
 PASSED_FILES=0
 FAILED_FILES=0
 
-# Find all .o and .a files recursively, excluding specified patterns
+# Check each file for required and forbidden symbols
 for objfile in "${FILES_LIST[@]}"; do
-    missing=0
+    failed=0
     declare -A FILE_MISSING
-    for sym in "${REQUIRED_SYMBOLS[@]}"; do
-        if ! nm "$objfile" 2>/dev/null | grep -qE "(_)?$sym"; then
+    declare -A FILE_FORBIDDEN
+    
+    # Check for missing required symbols
+    for sym in "${!REQUIRED_SYMBOLS[@]}"; do
+        regex="${REQUIRED_SYMBOLS[$sym]}"
+        if ! nm "$objfile" 2>/dev/null | grep -qE "$regex"; then
             echo "$objfile: missing symbol $sym" >>"$FAILED_REPORT"
-            missing=1
+            failed=1
             FILE_MISSING[$sym]=1
         fi
     done
-    for sym in "${REQUIRED_SYMBOLS[@]}"; do
-        if [[ ${FILE_MISSING[$sym]} ]]; then
-            echo "$sym" >>"$MISSING_SYMBOL_COUNTS_FILE"
+    
+    # Check for forbidden symbols
+    for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+        regex="${FORBIDDEN_SYMBOLS[$sym]}"
+        if nm "$objfile" 2>/dev/null | grep -qE "$regex"; then
+            echo "$objfile: found forbidden symbol $sym" >>"$FAILED_REPORT"
+            failed=1
+            FILE_FORBIDDEN[$sym]=1
         fi
     done
-    if [ $missing -eq 0 ]; then
+    
+    # Update counters
+    for sym in "${!FILE_MISSING[@]}"; do
+        echo "$sym" >>"$MISSING_SYMBOL_COUNTS_FILE"
+    done
+    for sym in "${!FILE_FORBIDDEN[@]}"; do
+        echo "$sym" >>"$FORBIDDEN_SYMBOL_COUNTS_FILE"
+    done
+    
+    if [ $failed -eq 0 ]; then
         echo "$objfile" >>"$PASSED_REPORT"
         PASSED_FILES=$((PASSED_FILES + 1))
     else
@@ -73,14 +107,19 @@ for objfile in "${FILES_LIST[@]}"; do
         echo "$objfile: total symbols: $total_syms" >>"$FAILED_REPORT"
         FAILED_FILES=$((FAILED_FILES + 1))
     fi
+    
     unset FILE_MISSING
+    unset FILE_FORBIDDEN
 done
 
-# After processing all files, print missing symbol counts to console and report
-for sym in "${REQUIRED_SYMBOLS[@]}"; do
+# After processing all files, print missing symbol counts
+for sym in "${!REQUIRED_SYMBOLS[@]}"; do
     MISSING_SYMBOL_COUNTS[$sym]=$(grep -c "^$sym$" "$MISSING_SYMBOL_COUNTS_FILE")
 done
-rm -f "$MISSING_SYMBOL_COUNTS_FILE"
+for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+    FORBIDDEN_SYMBOL_COUNTS[$sym]=$(grep -c "^$sym$" "$FORBIDDEN_SYMBOL_COUNTS_FILE")
+done
+rm -f "$MISSING_SYMBOL_COUNTS_FILE" "$FORBIDDEN_SYMBOL_COUNTS_FILE"
 
 # Print summary at the top of the report and to console
 EXCLUDED_COUNT=${#EXCLUDED_LIST[@]}
@@ -92,18 +131,28 @@ echo "Files/directories excluded: $EXCLUDED_COUNT" | tee -a "$REPORT_FILE"
 echo >>"$REPORT_FILE"
 
 echo "== Missing Symbol Counts =="
-for sym in "${REQUIRED_SYMBOLS[@]}"; do
+for sym in "${!REQUIRED_SYMBOLS[@]}"; do
     echo "$sym: ${MISSING_SYMBOL_COUNTS[$sym]} files missing"
+done
+
+echo "== Forbidden Symbol Counts =="
+for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+    echo "$sym: ${FORBIDDEN_SYMBOL_COUNTS[$sym]} files found"
 done
 
 echo "==== Symbol Check Report ====" >>"$REPORT_FILE"
 echo >>"$REPORT_FILE"
 echo "== Missing Symbol Counts ==" >>"$REPORT_FILE"
-for sym in "${REQUIRED_SYMBOLS[@]}"; do
+for sym in "${!REQUIRED_SYMBOLS[@]}"; do
     echo "$sym: ${MISSING_SYMBOL_COUNTS[$sym]} files missing" >>"$REPORT_FILE"
 done
 echo >>"$REPORT_FILE"
-echo "== Files Missing Required Symbols ==" >>"$REPORT_FILE"
+echo "== Forbidden Symbol Counts ==" >>"$REPORT_FILE"
+for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+    echo "$sym: ${FORBIDDEN_SYMBOL_COUNTS[$sym]} files found" >>"$REPORT_FILE"
+done
+echo >>"$REPORT_FILE"
+echo "== Files Missing Required Symbols or Containing Forbidden Symbols ==" >>"$REPORT_FILE"
 if [ -s "$FAILED_REPORT" ]; then
     cat "$FAILED_REPORT" >>"$REPORT_FILE"
 else
