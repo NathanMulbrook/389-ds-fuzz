@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <pthread.h>
+#include <sanitizer/coverage_interface.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/socket.h>
@@ -27,10 +28,30 @@ int port = 5555;
 
 void saveCurrentInput() { save_fuzz_input = 1; }
 
-__attribute__((no_sanitize("address"))) int checkServerUp() {
+void dumpCoverage() {
+  // Manually dump coverage every N iterations
+  static FILE *coverage_file = NULL;
+  static int coverage_call_count = 0;
+  if (++coverage_call_count % 1000 == 0) {
+    char filename[256];
+    snprintf(filename, sizeof(filename),
+             "/home/admin/software/fuzzing/389ds-test/389-ds-fuzz/logs/"
+             "coverage_%d.sancov",
+             coverage_call_count);
 
-  int validResponse = 0;
+    // Try direct file creation approach
+    __sanitizer_dump_coverage((const uintptr_t *)filename, 1);
 
+    fprintf(stderr, "Attempted coverage dump to %s\n", filename);
+
+    // Also try the original approach
+    __sanitizer_set_report_path("/home/admin/software/fuzzing/389ds-test/"
+                                "389-ds-fuzz/logs/coverage_alt");
+    __sanitizer_cov_dump();
+  }
+}
+
+int connectTarget() {
   struct sockaddr_in6 server_addr;
   int sockfd;
   int one = 1;
@@ -39,89 +60,83 @@ __attribute__((no_sanitize("address"))) int checkServerUp() {
   server_addr.sin6_port = htons(port);
   inet_pton(AF_INET6, ip, &server_addr.sin6_addr);
   setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-  connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
-  send(sockfd, bindMessage, 49, 0);
+  int connectSuccess =
+      connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+  if (connectSuccess == -1) {
+    close(sockfd);
+    return -1;
+  }
+  return sockfd;
+}
+
+int sendBindMessage(int sockfd) {
+  int validResponse = 1;
+  ssize_t sendSuccess = send(sockfd, bindMessage, 49, 0);
+  if (sendSuccess == -1) {
+    close(sockfd);
+    return -1;
+  }
   char recieve[2000];
-  validResponse = 1;
-  size_t recievedBytes = recv(sockfd, recieve, 2000, 0);
+  ssize_t recievedBytes = recv(sockfd, recieve, 2000, 0);
   if (recievedBytes == 14) {
-    for (int i = 0; i == 14; i++) {
-      if (recieve[i] != bindResponse[i]) {
-        validResponse = 0;
-        break;
-      }
-    }
+    // for (int i = 0; i < 14; i++) {
+    //   if (recieve[i] != bindResponse[i]) {
+    //     validResponse = 0;
+    //     break;
+    //   }
+    // }
   } else {
     validResponse = 0;
   }
   if (validResponse == 1) {
+    return 1;
     // printf("Bind Successfull\n");
   } else {
+    return -1;
     // printf("Bind Failed\n");
   }
-
-  close(sockfd);
-  return (validResponse);
 }
 
-__attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
-                                                       size_t Size) {
+int checkServerUp() {
+  int sockfd = connectTarget();
+  if (sockfd == -1) {
+    fprintf(stderr, "Failed to connect to server\n");
+    return 0;
+  }
+  int bindSuccess = sendBindMessage(sockfd);
+  if (bindSuccess == -1) {
+    close(sockfd);
+    return 0;
+  }
+  return 1; // server is up
+}
+
+int fuzzServer(const uint8_t *Data, size_t Size) {
   struct timeval now;
   gettimeofday(&now, NULL);
 
-  int validResponse = 1;
-
   if (Size >= 1) {
-    struct sockaddr_in6 server_addr;
-    int sockfd;
-    int one = 1;
-    sockfd = socket(AF_INET6, SOCK_STREAM, 0);
-    server_addr.sin6_family = AF_INET6;
-    server_addr.sin6_port = htons(port);
-    inet_pton(AF_INET6, ip, &server_addr.sin6_addr);
-    setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
-
-    connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr));
+    int sockfd = connectTarget();
+    if (sockfd == -1) {
+      fprintf(stderr, "Failed to connect to server\n");
+      return 1; // ensure the fuzzer discards the test case
+    }
     if (Data[0] == 1) {
-      send(sockfd, bindMessage, 49, 0);
-      char recieve[2000];
-      size_t recievedBytes = recv(sockfd, recieve, 2000, 0);
-      if (recievedBytes == 14) {
-        for (int i = 0; i == 14; i++) {
-          if (recieve[i] != bindResponse[i]) {
-            validResponse = 0;
-            break;
-          }
-        }
-      } else {
-        validResponse = 0;
-      }
-      if (validResponse == 1) {
-        // printf("Bind Successfull\n");
-        send(sockfd, &Data[1], Size - 1, 0);
-      } else {
-        return 1;
-        // printf("Bind Failed\n");
+      int bindSuccess = sendBindMessage(sockfd);
+      if (bindSuccess == -1) {
+        close(sockfd);
+        return 1; // ensure the fuzzer discards the test case
       }
     }
-    if (Size >= 2) {
-      send(sockfd, &Data[1], Size - 1, 0);
-      // setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout,
-      // sizeof timeout);
-      //   char recieve[60000];
-      //   size_t recievedBytes = recv(sockfd, recieve, 60000, 0);
-    }
+    // send test data
+    send(sockfd, &Data[1], Size - 1, 0);
+
     if (save_fuzz_input == 0) {
       char pathToTestCaseLog = "/home/admin/software/fuzzing/389ds-test/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
-      // fprintf(testCases, "Fuzzer Data \n ");
       if (Data[0] == 1) {
         fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec,
                 now.tv_usec);
-
-        //   if (validResponse == 1) {
-        //     fprintf(testCases, "Bind was successfull\n");
-        //   }
       }
       fprintf(testCases, "%010ld:%06ld - ", now.tv_sec, now.tv_usec);
       for (int i = 1; i < Size; i++) {
@@ -134,15 +149,8 @@ __attribute__((no_sanitize("address"))) int fuzzServer(const uint8_t *Data,
     close(sockfd);
     usleep(1850);
   }
-
-  return 1;
+  return 0;
 }
-
-// char *arg_array[] = {"0", "corpus", "-max_len=60000", "-len_control=30",
-// "-use_value_profile=1", "-dict=dict.txt", NULL};
-
-// char **args_ptr = &arg_array[0];
-// int args_size = 6;
 
 char *arg_array[] = {
     "0",
@@ -151,19 +159,22 @@ char *arg_array[] = {
     "-detect_leaks=0",
     "-len_control=20",
     "-rss_limit_mb=20530",
+    "-verbosity=4",
     NULL};
 
 char **args_ptr = &arg_array[0];
-int args_size = 6;
+int args_size = 7;
 
-__attribute__((no_sanitize("address"))) void *launchFuzzer2(void *param) {
+void *launchFuzzer2(void *param) {
+  int attemptNumber = 0;
   int validResponse = 0;
   while (validResponse == 0) {
     validResponse = checkServerUp();
-    fprintf(stderr, "Waiting for server to start\n");
+    fprintf(stderr, "Waiting for server to start %d\n", attemptNumber);
+    attemptNumber++;
     sleep(1);
   }
-  printf("Bind Successfull\n");
+  fprintf(stderr, "Bind Successfull\n");
 
   LLVMFuzzerRunDriver(&args_size, &args_ptr, &fuzzServer);
 }

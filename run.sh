@@ -6,7 +6,11 @@ pkill ns-slapd
 LOG_OUPTUT=1
 PACKET_CAPTURE=0
 
-mkdir logs/old
+mkdir -p logs/old/build
+mkdir -p logs/old/error
+mkdir -p logs/old/asan
+mkdir -p logs/old/testCases
+
 cp logrotate.conf run/logrotate.conf
 sed -i s!tacos!$directory!g run/logrotate.conf
 
@@ -25,7 +29,7 @@ config_build() {
     case "${BUILD_CONFIG}" in
 
     1)
-        config_flags="-d 32 "
+        config_flags="-d errors"
         ;;
     2)
         config_flags="-d ALL"
@@ -85,8 +89,7 @@ config_build() {
         config_flags="-d 16"
         ;;
 
-    \
-        *)
+    *)
         echo "Bad case. Try again."
         echo "Argument should be number 1-10"
         exit 1
@@ -100,12 +103,12 @@ run_fuzzer() {
 
     if [ $LOG_OUPTUT = 1 ]; then
         echo "ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ  >> $directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &"
-        ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ >>$directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &
+        FUZZER_DEBUG=1 ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ >>$directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &
 
     else
 
         echo "ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ &"
-        ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ &
+        FUZZER_DEBUG=1 ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ &
     fi
 
     fuzzerpids+=($!)
