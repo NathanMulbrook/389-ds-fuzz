@@ -24,11 +24,17 @@ declare -A FORBIDDEN_SYMBOLS=(
 # Exclude patterns (files or directories, edit as needed)
 EXCLUDES=("debug/incremental" "exclude_file.o")
 
-# Temporary files for report
-FAILED_REPORT=$(mktemp)
-PASSED_REPORT=$(mktemp)
-MISSING_SYMBOL_COUNTS_FILE=$(mktemp)
-FORBIDDEN_SYMBOL_COUNTS_FILE=$(mktemp)
+# In-memory arrays and counters for report
+FAILED_REPORT=()
+PASSED_REPORT=()
+MISSING_SYMBOL_COUNTS=()
+FORBIDDEN_SYMBOL_COUNTS=()
+for sym in "${!REQUIRED_SYMBOLS[@]}"; do
+    MISSING_SYMBOL_COUNTS[$sym]=0
+done
+for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
+    FORBIDDEN_SYMBOL_COUNTS[$sym]=0
+done
 
 # Count totals for summary
 TOTAL_FILES=0
@@ -37,16 +43,6 @@ FAILED_FILES=0
 
 # Remove old report file if it exists
 rm -f "$REPORT_FILE"
-
-# Initialize counters for each symbol
-declare -A MISSING_SYMBOL_COUNTS
-declare -A FORBIDDEN_SYMBOL_COUNTS
-for sym in "${!REQUIRED_SYMBOLS[@]}"; do
-    MISSING_SYMBOL_COUNTS[$sym]=0
-done
-for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
-    FORBIDDEN_SYMBOL_COUNTS[$sym]=0
-done
 
 # Build find exclude arguments
 FIND_EXCLUDES=()
@@ -75,7 +71,7 @@ for objfile in "${FILES_LIST[@]}"; do
     for sym in "${!REQUIRED_SYMBOLS[@]}"; do
         regex="${REQUIRED_SYMBOLS[$sym]}"
         if ! nm "$objfile" 2>/dev/null | grep -qE "$regex"; then
-            echo "$objfile: missing symbol $sym" >>"$FAILED_REPORT"
+            FAILED_REPORT+=("$objfile: missing symbol $sym")
             failed=1
             FILE_MISSING[$sym]=1
         fi
@@ -85,7 +81,7 @@ for objfile in "${FILES_LIST[@]}"; do
     for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
         regex="${FORBIDDEN_SYMBOLS[$sym]}"
         if nm "$objfile" 2>/dev/null | grep -qE "$regex"; then
-            echo "$objfile: found forbidden symbol $sym" >>"$FAILED_REPORT"
+            FAILED_REPORT+=("$objfile: found forbidden symbol $sym")
             failed=1
             FILE_FORBIDDEN[$sym]=1
         fi
@@ -93,33 +89,24 @@ for objfile in "${FILES_LIST[@]}"; do
     
     # Update counters
     for sym in "${!FILE_MISSING[@]}"; do
-        echo "$sym" >>"$MISSING_SYMBOL_COUNTS_FILE"
+        MISSING_SYMBOL_COUNTS[$sym]=$((MISSING_SYMBOL_COUNTS[$sym]+1))
     done
     for sym in "${!FILE_FORBIDDEN[@]}"; do
-        echo "$sym" >>"$FORBIDDEN_SYMBOL_COUNTS_FILE"
+        FORBIDDEN_SYMBOL_COUNTS[$sym]=$((FORBIDDEN_SYMBOL_COUNTS[$sym]+1))
     done
     
     if [ $failed -eq 0 ]; then
-        echo "$objfile" >>"$PASSED_REPORT"
+        PASSED_REPORT+=("$objfile")
         PASSED_FILES=$((PASSED_FILES + 1))
     else
         total_syms=$(nm "$objfile" 2>/dev/null | wc -l)
-        echo "$objfile: total symbols: $total_syms" >>"$FAILED_REPORT"
+        FAILED_REPORT+=("$objfile: total symbols: $total_syms")
         FAILED_FILES=$((FAILED_FILES + 1))
     fi
     
     unset FILE_MISSING
     unset FILE_FORBIDDEN
 done
-
-# After processing all files, print missing symbol counts
-for sym in "${!REQUIRED_SYMBOLS[@]}"; do
-    MISSING_SYMBOL_COUNTS[$sym]=$(grep -c "^$sym$" "$MISSING_SYMBOL_COUNTS_FILE")
-done
-for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
-    FORBIDDEN_SYMBOL_COUNTS[$sym]=$(grep -c "^$sym$" "$FORBIDDEN_SYMBOL_COUNTS_FILE")
-done
-rm -f "$MISSING_SYMBOL_COUNTS_FILE" "$FORBIDDEN_SYMBOL_COUNTS_FILE"
 
 # Print summary at the top of the report and to console
 EXCLUDED_COUNT=${#EXCLUDED_LIST[@]}
@@ -153,15 +140,19 @@ for sym in "${!FORBIDDEN_SYMBOLS[@]}"; do
 done
 echo >>"$REPORT_FILE"
 echo "== Files Missing Required Symbols or Containing Forbidden Symbols ==" >>"$REPORT_FILE"
-if [ -s "$FAILED_REPORT" ]; then
-    cat "$FAILED_REPORT" >>"$REPORT_FILE"
+if [ ${#FAILED_REPORT[@]} -gt 0 ]; then
+    for line in "${FAILED_REPORT[@]}"; do
+        echo "$line" >>"$REPORT_FILE"
+    done
 else
     echo "None" >>"$REPORT_FILE"
 fi
 echo >>"$REPORT_FILE"
 echo "== Files Passing All Checks ==" >>"$REPORT_FILE"
-if [ -s "$PASSED_REPORT" ]; then
-    cat "$PASSED_REPORT" >>"$REPORT_FILE"
+if [ ${#PASSED_REPORT[@]} -gt 0 ]; then
+    for line in "${PASSED_REPORT[@]}"; do
+        echo "$line" >>"$REPORT_FILE"
+    done
 else
     echo "None" >>"$REPORT_FILE"
 fi
@@ -171,6 +162,3 @@ for excl in "${EXCLUDED_LIST[@]}"; do
     echo "$excl" >>"$REPORT_FILE"
 done
 echo >>"$REPORT_FILE"
-
-# Cleanup
-rm -f "$FAILED_REPORT" "$PASSED_REPORT"
