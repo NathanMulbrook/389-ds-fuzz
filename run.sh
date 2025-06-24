@@ -6,7 +6,11 @@ pkill ns-slapd
 LOG_OUPTUT=1
 PACKET_CAPTURE=0
 
-mkdir logs/old
+mkdir -p logs/old/build
+mkdir -p logs/old/error
+mkdir -p logs/old/asan
+mkdir -p logs/old/testCases
+
 cp logrotate.conf run/logrotate.conf
 sed -i s!tacos!$directory!g run/logrotate.conf
 
