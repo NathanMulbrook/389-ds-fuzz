@@ -18,6 +18,11 @@ FAILED_REPORT=$(mktemp)
 PASSED_REPORT=$(mktemp)
 MISSING_SYMBOL_COUNTS_FILE=$(mktemp)
 
+# Count totals for summary
+TOTAL_FILES=0
+PASSED_FILES=0
+FAILED_FILES=0
+
 # Remove old report file if it exists
 rm -f "$REPORT_FILE"
 
@@ -35,8 +40,17 @@ for pattern in "${EXCLUDES[@]}"; do
     EXCLUDED_LIST+=("$pattern")
 done
 
-# Find all .o files recursively, excluding specified patterns
-find "$DIR" -type f -name "*.o" "${FIND_EXCLUDES[@]}" | while read -r objfile; do
+FILES_LIST=()
+while IFS= read -r objfile; do
+    FILES_LIST+=("$objfile")
+done < <(find "$DIR" -type f -regextype posix-extended -regex ".*\.(o|a)$" "${FIND_EXCLUDES[@]}")
+
+TOTAL_FILES=${#FILES_LIST[@]}
+PASSED_FILES=0
+FAILED_FILES=0
+
+# Find all .o and .a files recursively, excluding specified patterns
+for objfile in "${FILES_LIST[@]}"; do
     missing=0
     declare -A FILE_MISSING
     for sym in "${REQUIRED_SYMBOLS[@]}"; do
@@ -53,9 +67,11 @@ find "$DIR" -type f -name "*.o" "${FIND_EXCLUDES[@]}" | while read -r objfile; d
     done
     if [ $missing -eq 0 ]; then
         echo "$objfile" >>"$PASSED_REPORT"
+        PASSED_FILES=$((PASSED_FILES + 1))
     else
         total_syms=$(nm "$objfile" 2>/dev/null | wc -l)
         echo "$objfile: total symbols: $total_syms" >>"$FAILED_REPORT"
+        FAILED_FILES=$((FAILED_FILES + 1))
     fi
     unset FILE_MISSING
 done
@@ -65,6 +81,15 @@ for sym in "${REQUIRED_SYMBOLS[@]}"; do
     MISSING_SYMBOL_COUNTS[$sym]=$(grep -c "^$sym$" "$MISSING_SYMBOL_COUNTS_FILE")
 done
 rm -f "$MISSING_SYMBOL_COUNTS_FILE"
+
+# Print summary at the top of the report and to console
+EXCLUDED_COUNT=${#EXCLUDED_LIST[@]}
+echo "==== Symbol Check Summary ====" | tee "$REPORT_FILE"
+echo "Total files checked: $TOTAL_FILES" | tee -a "$REPORT_FILE"
+echo "Files passed: $PASSED_FILES" | tee -a "$REPORT_FILE"
+echo "Files failed: $FAILED_FILES" | tee -a "$REPORT_FILE"
+echo "Files/directories excluded: $EXCLUDED_COUNT" | tee -a "$REPORT_FILE"
+echo >>"$REPORT_FILE"
 
 echo "== Missing Symbol Counts =="
 for sym in "${REQUIRED_SYMBOLS[@]}"; do
