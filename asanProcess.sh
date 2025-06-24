@@ -27,7 +27,7 @@ sed -E 's/\(BuildId: [0-9a-f]{15,40}\)/\(BuildId\: ?????????????\)/g' | \
 
 
 sed  's/####=================================================================/\n=================================================================/g' | \
-grep -v -e 'attempting\sfree\son\saddress\swhich\swas\snot\smalloc.*ch_malloc\.c\:266\:' | \
+grep -v -e 'attempting\sfree\son\saddress\swhich\swas\snot\smalloc.*ch_malloc\.c:266:' | \
 
 
 sort | \
