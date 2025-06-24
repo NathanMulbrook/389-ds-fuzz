@@ -32,8 +32,8 @@ PATCHDIRS=(
 directory="$(pwd)"
 source_dir="$directory/389-ds-base"
 
-export CFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4  -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
-export CXXFLAGS='-g -pipe -Wall -O2 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4 -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
+export CFLAGS='-g -pipe -Wall -O0 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4  -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
+export CXXFLAGS='-g -pipe -Wall -O0 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4 -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
 export config_flags_default="--enable-asan --enable-ubsan --enable-rust --enable-clang --disable-dependency-tracking"
 
 #Configs for the differnt builds
