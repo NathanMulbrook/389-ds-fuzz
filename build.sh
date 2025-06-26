@@ -22,7 +22,8 @@ PRIVATEBRANCH="master"
 #A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
 #A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.6
 #A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
-A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.8
+#A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.8
+A389BRANCH="tags/389-ds-base-2.6.2" #2.6.2
 
 PATCHDIRS=(
     "389-ds-patches/patches"
@@ -31,10 +32,66 @@ PATCHDIRS=(
 
 directory="$(pwd)"
 source_dir="$directory/389-ds-base"
+export PATH="$HOME/.cargo/bin:$PATH"
+rustup default stable-x86_64-unknown-linux-gnu
+rustup default nightly
+rustup component add rust-src llvm-tools-preview
+export CFLAGS="-g \
+    -pipe \
+    -Wall \
+    -O0 \
+    -fexceptions \
+    -fstack-protector \
+    -Wno-implicit-function-declaration \
+    -U_FORTIFY_SOURCE \
+    -D_FORTIFY_SOURCE=0 \
+    --param=ssp-buffer-size=4 \
+    -m64 \
+    -mtune=generic \
+    -fsanitize-recover=all \
+    -fsanitize=fuzzer-no-link,address,undefined \
+    -fprofile-instr-generate \
+    -fcoverage-mapping"
 
-export CFLAGS='-g -pipe -Wall -O0 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4  -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
-export CXXFLAGS='-g -pipe -Wall -O0 -fexceptions -fstack-protector -Wno-implicit-function-declaration  -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 --param=ssp-buffer-size=4 -m64 -mtune=generic  -fsanitize-recover=all -fsanitize=fuzzer-no-link,address,undefined  -fprofile-instr-generate  -fcoverage-mapping'
-export config_flags_default="--enable-asan --enable-ubsan --enable-rust --enable-clang --disable-dependency-tracking"
+export CXXFLAGS="-g \
+    -pipe \
+    -Wall \
+    -O0 \
+    -fexceptions \
+    -fstack-protector \
+    -Wno-implicit-function-declaration \
+    -U_FORTIFY_SOURCE \
+    -D_FORTIFY_SOURCE=0 \
+    --param=ssp-buffer-size=4 \
+    -m64 \
+    -mtune=generic \
+    -fsanitize-recover=all \
+    -fsanitize=fuzzer-no-link,address,undefined \
+    -fprofile-instr-generate \
+    -fcoverage-mapping"
+
+#  export RUSTFLAGS="--cap-lints=warn" \
+#     -C instrument-coverage \
+#     -C passes=sancov-module \
+#     -C llvm-args=-sanitizer-coverage-level=3 \
+#     -C llvm-args=-sanitizer-coverage-inline-8bit-counters \
+#     -Zsanitizer=address \
+#     -C link-arg=-fsanitize=address"
+#     #--emit=obj \
+
+#  export RUSTDOCFLAGS="--emit=obj \
+# #     -C instrument-coverage \
+# #     -C passes=sancov-module \
+# #     -C llvm-args=-sanitizer-coverage-level=3 \
+# #     -C llvm-args=-sanitizer-coverage-inline-8bit-counters \
+# #     -Zsanitizer=address \
+# #     -C link-arg=-fsanitize=address"
+
+export config_flags_default="--enable-asan \
+    --enable-ubsan \
+    --enable-rust \
+    --enable-clang \
+    --disable-dependency-tracking"
 
 #Configs for the differnt builds
 config_build() {
@@ -165,6 +222,10 @@ build_software() {
 
     if [ ${REBUILD_DIRECTORY} = 0 ]; then
         cp -r "$source_dir"/. "$temp_source_dir"
+        find "$temp_source_dir" -type f -name "Cargo.toml" -print0 | while IFS= read -r -d $'\0' cargo_file; do
+            dest_dir=$(dirname "$cargo_file")
+            cp -v "config.toml" "$dest_dir/"
+        done
         cd "$temp_source_dir" || (build_failed)
         if [ $PATCH = 1 ]; then
             for PATCHDIR in $PATCHDIRS; do
@@ -272,7 +333,8 @@ fi
 
 if [ ${BUILD_INIT} = 1 ]; then
     cd "$directory" || build_failed
-    git clone git@github.com:NathanMulbrook/389-ds-base.git
+    #git clone git@github.com:NathanMulbrook/389-ds-base.git
+    git clone https://github.com/389ds/389-ds-base.git
     cd "$temp_source_dir" || build_failed
     git checkout $A389BRANCH
     cd "$directory" || build_failed
@@ -311,7 +373,7 @@ if [ "$CONFIG" = "a" ] || [ "$CONFIG" = "all" ]; then
     wait
 else
     BUILD_CONFIG="$CONFIG"
-    build_software $@
+    build_software "$@"
 fi
 
 #   --disable-option-checking  ignore unrecognized --enable/--with options

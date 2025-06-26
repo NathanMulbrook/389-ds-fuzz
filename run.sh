@@ -157,7 +157,10 @@ fi
 
 while :; do
     sleep 30
+    ./asanProcess.sh
+    cp asanfiltered.log logs/asanfiltered.log 
     logrotate run/logrotate.conf -s logs/old/logrotate.status
+ 
 done
 
 # {LDAP_DEBUG_TRACE, "trace", 0},

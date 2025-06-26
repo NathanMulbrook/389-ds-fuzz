@@ -1,0 +1,13 @@
+[build]
+rustflags = [--cap-lints=warn]
+
+# Only apply sanitizer/coverage flags to your final binary or library
+[target.'cfg(not(proc_macro))']
+rustflags = [
+    "-Zsanitizer=address",
+    "-C", "link-arg=-fsanitize=address",
+    "-C", "instrument-coverage",
+    "-C", "passes=sancov-module",
+    "-C", "llvm-args=-sanitizer-coverage-level=3",
+    "-C", "llvm-args=-sanitizer-coverage-inline-8bit-counters"
+]
