@@ -17,13 +17,14 @@ BUILD_INIT=0
 BUILD_DIRECTORY=0
 REBUILD_DIRECTORY=0
 JOBS=1 #setting 1 often causes build fails
-PATCHBRANCH="2.6"
+PATCHBRANCH="3.1"
 PRIVATEBRANCH="master"
 #A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
 #A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.6
 #A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
 #A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.8
-A389BRANCH="tags/389-ds-base-2.6.2" #2.6.2
+#A389BRANCH="tags/389-ds-base-2.6.2" #2.6.2
+A389BRANCH="tags/389-ds-base-3.1.3" #3.1
 
 PATCHDIRS=(
     "389-ds-patches/patches"
@@ -107,10 +108,10 @@ config_build() {
         config_flags="${config_flags_default} --enable-debug --with-openldap"
         ;;
     4)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-autobind --enable-auto-dn-suffix"
         ;;
     5)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-autobind --enable-auto-dn-suffix"
         ;;
     6)
         config_flags="${config_flags_default} --enable-debug "
@@ -128,16 +129,16 @@ config_build() {
         config_flags="${config_flags_default} "
         ;;
     11)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-cmocka "
         ;;
     12)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-cmocka "
         ;;
     13)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-autobind --enable-auto-dn-suffix --enable-cmocka"
         ;;
     14)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --enable-autobind --enable-auto-dn-suffix --enable-cmocka"
         ;;
     15)
         config_flags="${config_flags_default} --enable-debug --with-openldap"
@@ -149,10 +150,10 @@ config_build() {
         config_flags="${config_flags_default} --enable-debug --with-openldap"
         ;;
     18)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --with-netsnmp"
         ;;
     19)
-        config_flags="${config_flags_default} --enable-debug --with-openldap"
+        config_flags="${config_flags_default} --enable-debug --with-openldap --with-netsnmp"
         ;;
     20)
         config_flags="${config_flags_default} --enable-debug --with-openldap"

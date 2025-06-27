@@ -156,9 +156,9 @@ else
 fi
 
 while :; do
-    sleep 30
+    sleep 60
     ./asanProcess.sh
-    cp asanfiltered.log logs/asanfiltered.log 
+    #cp asanfiltered.log logs/asanfiltered.log 
     logrotate run/logrotate.conf -s logs/old/logrotate.status
  
 done
