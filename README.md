@@ -1,5 +1,17 @@
 # 389-ds-fuzz
 
+## Toolchain
+
+Build the pinned LLVM 23.1.1 toolchain before building the fuzzers:
+
+```console
+./build.sh --bootstrap-toolchain
+```
+
+This keeps Clang, ASan, UBSan, libFuzzer, and the LLVM coverage tools aligned
+with Rust's LLVM version. See [the toolchain documentation](toolchain/README.md)
+for disk requirements and configuration.
+
 ## Rust instrumentation
 
 Rust flags live in `389-ds-patches/patches/config.in.patch`. Configure generates
@@ -25,3 +37,12 @@ Local reports and execution profiles are saved under `logs/baselines/`; the
 comparison measures instrumentation, not corpus execution coverage. Build
 validation should use a separate directory while fuzzers run: `build.sh`
 replaces installed outputs and stops matching server processes.
+
+Each `run.sh` invocation writes coverage profiles to its own directory under
+`logs/profiles/`. Module and process identifiers in the filenames keep profiles
+from separate binaries and runs from overwriting or corrupting each other.
+After stopping the fuzzers, generate text and HTML coverage for one variant:
+
+```console
+./genreport.sh logs/profiles/SESSION_DIRECTORY 15
+```

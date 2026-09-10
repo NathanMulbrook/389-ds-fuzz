@@ -1,6 +1,29 @@
 #!/usr/bin/env bash
-export CC='clang'
-export CXX='clang++'
+
+directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
+help() {
+    echo "Usage: ./build.sh [options]"
+    echo "  --bootstrap-toolchain  Build the pinned LLVM toolchain and exit"
+    echo "  --config=N, -c=N       Build configuration N"
+    echo "  --directory, -d        Create the server instance after building"
+    echo "  --jobs, -j             Build with four jobs"
+    exit
+}
+
+for arg in "$@"; do
+    case "$arg" in
+    --help | -h)
+        help
+        ;;
+    --bootstrap-toolchain)
+        "$directory/toolchain/build-llvm.sh"
+        exit
+        ;;
+    esac
+done
+
+source "$directory/toolchain/use-llvm.sh" || exit
 export LSAN_OPTIONS=detect_leaks=0
 if [ -f "/home/$(whoami)/.cargo/bin" ]; then
     export PATH=$PATH:/home/$(whoami)/.cargo/bin
@@ -31,15 +54,14 @@ PATCHDIRS=(
     "389-ds-private/patches"
 )
 
-directory="$(pwd)"
 source_dir="$directory/389-ds-base"
 export PATH="$HOME/.cargo/bin:$PATH"
 if [ -z "${DS_FUZZ_RUSTUP_READY:-}" ]; then
-    rustup default stable-x86_64-unknown-linux-gnu
-    rustup default nightly
-    rustup component add rust-src llvm-tools-preview
+    rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+    rustup component add --toolchain "$RUST_TOOLCHAIN" rust-src llvm-tools-preview
     export DS_FUZZ_RUSTUP_READY=1
 fi
+verify_rust_llvm || exit
 export CFLAGS="-g \
     -pipe \
     -Wall \
@@ -173,12 +195,6 @@ trap _term INT
 
 build_failed() {
     echo "BUILD FAILED!!"
-    exit
-}
-
-help() {
-    echo "Is a useful program"
-    echo "Read the source. kthxbai"
     exit
 }
 

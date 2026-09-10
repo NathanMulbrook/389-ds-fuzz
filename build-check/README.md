@@ -14,19 +14,19 @@ From the repository root:
 python3 build-check/check_build.py build-check/check-build.ini
 ```
 
-Edit `check-build.ini` to select the builds. The project config covers variants
-1, 2, 3, 4, 9, 10, 11, 12, 18, and 19, which have built server binaries. It checks
-their objects, linked outputs under `.libs`, and installed `bin`, `sbin`, and `lib`
-directories. It writes one Markdown report, `logs/symbolReport.md`, with the
-summary first and file-by-file evidence at the end. Incomplete variants are omitted.
+Edit `check-build.ini` to select the builds. The project config covers all 20
+currently built variants. It checks their objects, linked outputs under `.libs`,
+and installed `bin`, `sbin`, and `lib` directories. It writes one Markdown
+report, `logs/symbolReport.md`, with the summary first and file-by-file evidence
+at the end.
 The config expects stack protection, ASan/UBSan, and coverage evidence, with
 Fortify, TSan, and MSan absent. These expectations follow the project's C/C++
 flags. Small objects, Rust code, mixed dependencies, and helper programs can
 differ; use the path rules below to express their expectations. The shipped
-config ignores UBSan and Fortify for `*.rlib`, `*.rcgu.o`, and `*.a(*.rcgu.o)`.
-These Rust path rules retain every other baseline expectation, including stack
-protection, ASan, and coverage. The libFuzzer driver check is ignored in this
-broad scan because objects and libraries do not need a driver.
+config ignores stack protection, UBSan, and Fortify for Rust objects and final
+Rust plugin libraries. It retains ASan and every coverage expectation. The
+libFuzzer driver check is ignored in this broad scan because objects and
+libraries do not need a driver.
 Empty archives remain visible as inspection errors.
 The checker overwrites only its configured report; it does not change the build.
 Move this directory into another repository when needed; the launcher is optional.
