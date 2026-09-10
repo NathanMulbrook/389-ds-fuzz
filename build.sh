@@ -17,14 +17,14 @@ BUILD_INIT=0
 BUILD_DIRECTORY=0
 REBUILD_DIRECTORY=0
 JOBS=1 #setting 1 often causes build fails
-PATCHBRANCH="3.1"
-PRIVATEBRANCH="master"
+PATCHBRANCH="3.3"
+PRIVATEBRANCH="3.3"
 #A389BRANCH="3db81913e27002ced7df00e5625b804457593efb"
 #A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.6
 #A389BRANCH="a8f062ef90a6e5d5d4095fbe1838dcde82e835d9" #2.3.5
 #A389BRANCH="41add0d6576232a0e1d4096670f0fd9e2f60baa9" #2.3.8
 #A389BRANCH="tags/389-ds-base-2.6.2" #2.6.2
-A389BRANCH="tags/389-ds-base-3.1.3" #3.1
+A389BRANCH="tags/389-ds-base-3.3.1" #3.3.1
 
 PATCHDIRS=(
     "389-ds-patches/patches"
@@ -34,9 +34,12 @@ PATCHDIRS=(
 directory="$(pwd)"
 source_dir="$directory/389-ds-base"
 export PATH="$HOME/.cargo/bin:$PATH"
-rustup default stable-x86_64-unknown-linux-gnu
-rustup default nightly
-rustup component add rust-src llvm-tools-preview
+if [ -z "${DS_FUZZ_RUSTUP_READY:-}" ]; then
+    rustup default stable-x86_64-unknown-linux-gnu
+    rustup default nightly
+    rustup component add rust-src llvm-tools-preview
+    export DS_FUZZ_RUSTUP_READY=1
+fi
 export CFLAGS="-g \
     -pipe \
     -Wall \
@@ -229,7 +232,7 @@ build_software() {
         done
         cd "$temp_source_dir" || (build_failed)
         if [ $PATCH = 1 ]; then
-            for PATCHDIR in $PATCHDIRS; do
+            for PATCHDIR in "${PATCHDIRS[@]}"; do
                 git apply -v --reject --ignore-space-change --ignore-whitespace "$directory"/"$PATCHDIR"/*.patch || build_failed
                 printf "Applied patches from %s\n" "$PATCHDIR"
             done
@@ -290,7 +293,7 @@ build_software() {
         fi
     fi
     cd "$directory" || build_failed
-    pkill -9 -f "run_$BUILD_CONFIG/sbin/ns-slapd"
+    pkill -9 -f "run_$BUILD_CONFIG/sbin/ns-slapd" || true
 }
 
 for arg in "$@"; do
@@ -317,7 +320,7 @@ for arg in "$@"; do
         BUILD_INIT=1
         ;;
     --jobs | -j)
-        JOBS=$(($(nproc) - 1))
+        JOBS=4
         ;;
 
     --no_patch | -p) export PATCH=0 ;;
@@ -332,34 +335,37 @@ if [ ${REBUILD_DIRECTORY} = 1 ] && [ "$CONFIG" = "a" ]; then
     exit
 fi
 
-if [ ${BUILD_INIT} = 1 ]; then
+if [ -z "${DS_FUZZ_GIT_READY:-}" ]; then
+    if [ ${BUILD_INIT} = 1 ]; then
+        cd "$directory" || build_failed
+        #git clone git@github.com:NathanMulbrook/389-ds-base.git
+        git clone https://github.com/389ds/389-ds-base.git
+        cd "$temp_source_dir" || build_failed
+        git checkout $A389BRANCH
+        cd "$directory" || build_failed
+        git clone git@github.com:NathanMulbrook/389-ds-patches.git
+        cd 389-ds-patches || build_failed
+        git checkout $PATCHBRANCH
+        cd "$directory" || build_failed
+        git clone git@github.com:NathanMulbrook/389-ds-private.git
+        cd 389-ds-private || build_failed
+        git checkout $PRIVATEBRANCH
+        cd "$directory" || build_failed
+    fi
+
+    cd 389-ds-base || build_failed
+    git checkout $A389BRANCH || build_failed
     cd "$directory" || build_failed
-    #git clone git@github.com:NathanMulbrook/389-ds-base.git
-    git clone https://github.com/389ds/389-ds-base.git
-    cd "$temp_source_dir" || build_failed
-    git checkout $A389BRANCH
-    cd "$directory" || build_failed
-    git clone git@github.com:NathanMulbrook/389-ds-patches.git
+
     cd 389-ds-patches || build_failed
-    git checkout $PATCHBRANCH
+    git checkout $PATCHBRANCH || build_failed
     cd "$directory" || build_failed
-    git clone git@github.com:NathanMulbrook/389-ds-private.git
+
     cd 389-ds-private || build_failed
-    git checkout $PRIVATEBRANCH
+    git checkout $PRIVATEBRANCH || build_failed
     cd "$directory" || build_failed
+    export DS_FUZZ_GIT_READY=1
 fi
-
-cd 389-ds-base || build_failed
-git checkout $A389BRANCH || build_failed
-cd "$directory" || build_failed
-
-cd 389-ds-patches || build_failed
-git checkout $PATCHBRANCH || build_failed
-cd "$directory" || build_failed
-
-cd 389-ds-private || build_failed
-git checkout $PRIVATEBRANCH || build_failed
-cd "$directory" || build_failed
 
 if [ "$CONFIG" = "a" ] || [ "$CONFIG" = "all" ]; then
     logrotate --force run/logrotate.conf -s logs/old/logrotate.status
