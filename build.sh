@@ -74,23 +74,6 @@ export CXXFLAGS="-g \
     -fprofile-instr-generate \
     -fcoverage-mapping"
 
-#  export RUSTFLAGS="--cap-lints=warn" \
-#     -C instrument-coverage \
-#     -C passes=sancov-module \
-#     -C llvm-args=-sanitizer-coverage-level=3 \
-#     -C llvm-args=-sanitizer-coverage-inline-8bit-counters \
-#     -Zsanitizer=address \
-#     -C link-arg=-fsanitize=address"
-#     #--emit=obj \
-
-#  export RUSTDOCFLAGS="--emit=obj \
-# #     -C instrument-coverage \
-# #     -C passes=sancov-module \
-# #     -C llvm-args=-sanitizer-coverage-level=3 \
-# #     -C llvm-args=-sanitizer-coverage-inline-8bit-counters \
-# #     -Zsanitizer=address \
-# #     -C link-arg=-fsanitize=address"
-
 export config_flags_default="--enable-asan \
     --enable-ubsan \
     --enable-rust \
@@ -226,10 +209,6 @@ build_software() {
 
     if [ ${REBUILD_DIRECTORY} = 0 ]; then
         cp -r "$source_dir"/. "$temp_source_dir"
-        find "$temp_source_dir" -type f -name "Cargo.toml" -print0 | while IFS= read -r -d $'\0' cargo_file; do
-            dest_dir=$(dirname "$cargo_file")
-            cp -v "config.toml" "$dest_dir/"
-        done
         cd "$temp_source_dir" || (build_failed)
         if [ $PATCH = 1 ]; then
             for PATCHDIR in "${PATCHDIRS[@]}"; do
