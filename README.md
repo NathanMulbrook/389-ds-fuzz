@@ -46,3 +46,54 @@ After stopping the fuzzers, generate text and HTML coverage for one variant:
 ```console
 ./genreport.sh logs/profiles/SESSION_DIRECTORY 15
 ```
+
+## Multipacket corpus
+
+Prepare an existing corpus before the first multipacket run:
+
+```console
+./normalize-corpus-flags.py corpus
+```
+
+The script preserves the old bind behavior and adds two ordinary-packet seeds
+plus four two-packet seeds. The multipacket seeds cover fixed-delay and
+response-wait operation, with and without bind. The first byte contains the
+controls: bit 0 requests bind, bit 1 enables multipacket input, and bit 2 waits
+for a response between packets. Multipacket data is a repeated two-byte
+big-endian length followed by the raw packet bytes. Invalid lengths are rejected
+before connecting to the server.
+
+## Fuzzing directory
+
+When `build.sh` creates an instance with `--directory`, it first applies
+`fuzz-directory-config.ldif` and restarts the instance so the enabled plugins
+are active. It then applies `fuzz-directory.ldif`, which adds six unlocked
+users, two nested groups, and a manager account in the sample permission
+groups. This provides successful and denied bind/ACL paths and enough entries
+for paged and sorted searches.
+
+The configuration enables MemberOf, referential integrity, and UID uniqueness,
+and adds approximate indexing for `cn`. Each build configuration uses a unique
+instance name so its runtime statistics and semaphore are isolated.
+
+## Replaying one LDAP packet
+
+Start one instance without its embedded fuzzer:
+
+```console
+./run.sh --fuzz --config=1
+```
+
+`send-test-case.py` sends either a raw LDAP packet or one packet extracted from
+a multipacket fuzzer input. With no bind arguments it tests anonymous access:
+
+```console
+./send-test-case.py crash-input --packet 6 --port 5601
+./send-test-case.py crash-input --packet 6 --port 5601 \
+    --bind-dn 'uid=fuzz-user,ou=people,dc=example,dc=com' \
+    --password 'FuzzUser-pass-01'
+```
+
+The tool prints each LDAP response and then opens a new connection to report
+whether the server is still reachable. It uses only the Python standard
+library.

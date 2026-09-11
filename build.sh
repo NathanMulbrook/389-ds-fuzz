@@ -7,6 +7,7 @@ help() {
     echo "  --bootstrap-toolchain  Build the pinned LLVM toolchain and exit"
     echo "  --config=N, -c=N       Build configuration N"
     echo "  --directory, -d        Create the server instance after building"
+    echo "  --rebuild-directory, -r  Recreate instances from existing builds"
     echo "  --jobs, -j             Build with four jobs"
     exit
 }
@@ -205,8 +206,9 @@ build_software() {
     temp_source_dir="$directory/build/src_${BUILD_CONFIG}"
     port=$(($BUILD_CONFIG + 5600))
     portsec=$(($BUILD_CONFIG + 5700))
+    instance_name="test-instance-${BUILD_CONFIG}"
 
-    rm "$run_dir/sbin/ns-slapd" || (build_failed)
+    rm -f "$run_dir/sbin/ns-slapd"
     pkill -9 -f "run_$BUILD_CONFIG/sbin/ns-slapd"
     if [ ${BUILD_DIRECTORY} = 1 ]; then
         rm -rf "$run_dir" || (build_failed)
@@ -243,7 +245,7 @@ build_software() {
         sed -i "s#char\spathToTestCaseLog.*#char pathToTestCaseLog[] = \"${directory}/logs/testCases${BUILD_CONFIG}\";#g" \
             "$temp_source_dir"/ldap/servers/slapd/filter.c "$temp_source_dir"/ldap/servers/slapd/attrsyntax.c "$temp_source_dir"/ldap/servers/slapd/libglobs.c \
             "$temp_source_dir"/ldap/servers/slapd/back-ldbm/cache.c "$temp_source_dir"/ldap/servers/slapd/util.c "$temp_source_dir"/ldap/servers/slapd/fuzzer.c \
-            "$temp_source_dir"/ldap/servers/slapd/valueset.c
+            "$temp_source_dir"/ldap/servers/slapd/valueset.c "$temp_source_dir"/ldap/servers/plugins/syntaxes/phonetic.c
 
         config_build
         "$temp_source_dir"/configure $config_flags --with-localrundir="$run_dir/run" --exec-prefix="$run_dir/" --prefix="$run_dir/" || build_failed 5
@@ -276,6 +278,7 @@ build_software() {
         echo "db_home_dir = /dev/shm/slapd-${BUILD_CONFIG}" >>"$run_dir"/dssetup.inf
 
         sed -i s/admin/$(whoami)/g "$run_dir"/dssetup.inf
+        sed -i "s/instance_name = test-instance/instance_name = $instance_name/" "$run_dir"/dssetup.inf
         sed -i s/5555/$port/g "$run_dir"/dssetup.inf
         sed -i s/6667/$portsec/g "$run_dir"/dssetup.inf
 
@@ -286,6 +289,9 @@ build_software() {
             ./build.sh -c=$BUILD_CONFIG -r
             exit
         fi
+        ldapmodify -x -H "ldap://[::1]:$port" -D "cn=directory manager" -w secRet_passWord -f "$directory/fuzz-directory-config.ldif" || build_failed
+        PYTHONPATH="$PYTHONPATH:$temp_source_dir/src/lib389" PREFIX="$run_dir/" ASAN_OPTIONS="log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0" UBSAN_OPTIONS="halt_on_error=0" LSAN_OPTIONS="detect_leaks=0" "$temp_source_dir"/src/lib389/cli/dsctl "slapd-$instance_name" restart || build_failed
+        ldapmodify -x -H "ldap://[::1]:$port" -D "cn=directory manager" -w secRet_passWord -f "$directory/fuzz-directory.ldif" || build_failed
     fi
     cd "$directory" || build_failed
     pkill -9 -f "run_$BUILD_CONFIG/sbin/ns-slapd" || true
@@ -324,11 +330,6 @@ for arg in "$@"; do
 
     esac
 done
-
-if [ ${REBUILD_DIRECTORY} = 1 ] && [ "$CONFIG" = "a" ]; then
-    echo "Incompatible Arguents"
-    exit
-fi
 
 if [ -z "${DS_FUZZ_GIT_READY:-}" ]; then
     if [ ${BUILD_INIT} = 1 ]; then

@@ -1,8 +1,10 @@
 #include "fuzzer.h"
 #include <arpa/inet.h>
+#include <errno.h>
 #include <ifaddrs.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <poll.h>
 #include <pthread.h>
 #include <sanitizer/coverage_interface.h>
 #include <stdio.h>
@@ -12,6 +14,15 @@
 #include <unistd.h>
 
 int save_fuzz_input = 0;
+
+#define BIND_FLAG 0x01
+#define MULTIPACKET_FLAG 0x02
+#define WAIT_FOR_RESPONSE_FLAG 0x04
+#define MAX_PACKET_COUNT 64
+#define PACKET_DELAY_US 20000
+#define RESPONSE_TIMEOUT_MS 500
+
+/* Multipacket data is repeated: uint16 big-endian length, then raw bytes. */
 
 char bindMessage[49] = {0x30, 0x2f, 0x02, 0x01, 0x01, 0x60, 0x2a, 0x02, 0x01,
                         0x03, 0x04, 0x14, 0x63, 0x6e, 0x3d, 0x64, 0x69, 0x72,
@@ -69,6 +80,93 @@ int connectTarget() {
   return sockfd;
 }
 
+static int validMultipacketData(const uint8_t *data, size_t size) {
+  size_t offset = 0;
+  size_t packetCount = 0;
+
+  while (offset < size) {
+    if (size - offset < 2) {
+      return 0;
+    }
+
+    size_t packetSize = ((size_t)data[offset] << 8) | data[offset + 1];
+    offset += 2;
+
+    if (packetSize == 0 || packetSize > size - offset) {
+      return 0;
+    }
+
+    offset += packetSize;
+    packetCount++;
+    if (packetCount > MAX_PACKET_COUNT) {
+      return 0;
+    }
+  }
+
+  return packetCount > 0;
+}
+
+static int sendAll(int sockfd, const uint8_t *data, size_t size) {
+  size_t sent = 0;
+
+  while (sent < size) {
+    ssize_t result = send(sockfd, data + sent, size - sent, MSG_NOSIGNAL);
+    if (result > 0) {
+      sent += result;
+    } else if (result == -1 && errno == EINTR) {
+      continue;
+    } else {
+      return -1;
+    }
+  }
+
+  return 0;
+}
+
+static int waitForPacketResponse(int sockfd) {
+  struct pollfd socketEvent = {.fd = sockfd, .events = POLLIN};
+  int pollResult;
+
+  do {
+    pollResult = poll(&socketEvent, 1, RESPONSE_TIMEOUT_MS);
+  } while (pollResult == -1 && errno == EINTR);
+
+  if (pollResult <= 0) {
+    return -1;
+  }
+
+  /* Any response bytes are enough; the harness does not parse LDAP. */
+  char response[2000];
+  return recv(sockfd, response, sizeof(response), 0) > 0 ? 0 : -1;
+}
+
+static int sendMultipacketData(int sockfd, const uint8_t *data, size_t size,
+                               int waitForResponse) {
+  size_t offset = 0;
+
+  while (offset < size) {
+    size_t packetSize = ((size_t)data[offset] << 8) | data[offset + 1];
+    offset += 2;
+
+    if (sendAll(sockfd, data + offset, packetSize) == -1) {
+      return -1;
+    }
+    offset += packetSize;
+
+    if (offset < size) {
+      if (waitForResponse) {
+        if (waitForPacketResponse(sockfd) == -1) {
+          return -1;
+        }
+      } else {
+        usleep(PACKET_DELAY_US);
+      }
+    }
+  }
+
+  return 0;
+}
+
 int sendBindMessage(int sockfd) {
   int validResponse = 1;
   ssize_t sendSuccess = send(sockfd, bindMessage, 49, 0);
@@ -116,25 +214,44 @@ int fuzzServer(const uint8_t *Data, size_t Size) {
   gettimeofday(&now, NULL);
 
   if (Size >= 1) {
+    uint8_t flags = Data[0];
+    const uint8_t *payload = &Data[1];
+    size_t payloadSize = Size - 1;
+
+    if ((flags & MULTIPACKET_FLAG) &&
+        !validMultipacketData(payload, payloadSize)) {
+      return -1;
+    }
+
     int sockfd = connectTarget();
     if (sockfd == -1) {
       fprintf(stderr, "Failed to connect to server\n");
-      return 1; // ensure the fuzzer discards the test case
+      return -1; // ensure the fuzzer discards the test case
     }
-    if (Data[0] == 1) {
+    if (flags & BIND_FLAG) {
       int bindSuccess = sendBindMessage(sockfd);
       if (bindSuccess == -1) {
         close(sockfd);
-        return 1; // ensure the fuzzer discards the test case
+        return -1; // ensure the fuzzer discards the test case
       }
     }
-    // send test data
-    send(sockfd, &Data[1], Size - 1, 0);
+
+    int sendResult;
+    if (flags & MULTIPACKET_FLAG) {
+      sendResult = sendMultipacketData(
+          sockfd, payload, payloadSize, flags & WAIT_FOR_RESPONSE_FLAG);
+    } else {
+      sendResult = sendAll(sockfd, payload, payloadSize);
+    }
+    if (sendResult == -1) {
+      close(sockfd);
+      return 0;
+    }
 
     if (save_fuzz_input == 0) {
       char pathToTestCaseLog = "/home/admin/software/fuzzing/389ds-test/";
       FILE *testCases = fopen(pathToTestCaseLog, "a");
-      if (Data[0] == 1) {
+      if (flags & BIND_FLAG) {
         fprintf(testCases, "%010ld:%06ld - Bind was attempted\n", now.tv_sec,
                 now.tv_usec);
       }
@@ -145,7 +262,7 @@ int fuzzServer(const uint8_t *Data, size_t Size) {
       fprintf(testCases, "\n");
       fclose(testCases);
     }
-    usleep(20000);
+    usleep(PACKET_DELAY_US);
     close(sockfd);
     usleep(1850);
   }

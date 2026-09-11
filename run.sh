@@ -101,18 +101,20 @@ config_build() {
 
 run_fuzzer() {
     config_build
+    config_dir="$directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance-$BUILD_CONFIG"
+    pid_file="$directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance-$BUILD_CONFIG.pid"
     rm -rf /tmp/slapd_${BUILD_CONFIG}
     mkdir -p "$profile_dir/run_$BUILD_CONFIG"
     profile_file="$profile_dir/run_$BUILD_CONFIG/default-%m-%p.profraw"
 
     if [ $LOG_OUPTUT = 1 ]; then
-        echo "LLVM_PROFILE_FILE=$profile_file ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ  >> $directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &"
-        FUZZER_DEBUG=1 LLVM_PROFILE_FILE="$profile_file" ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ >>$directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &
+        echo "LLVM_PROFILE_FILE=$profile_file ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $config_dir -i $pid_file $config_flags $FUZZ  >> $directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &"
+        FUZZER_DEBUG=1 LLVM_PROFILE_FILE="$profile_file" ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 UBSAN_OPTIONS=halt_on_error=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D "$config_dir" -i "$pid_file" $config_flags $FUZZ >>$directory/logs/error$BUILD_CONFIG 2>>$directory/logs/error$BUILD_CONFIG &
 
     else
 
-        echo "LLVM_PROFILE_FILE=$profile_file ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ &"
-        FUZZER_DEBUG=1 LLVM_PROFILE_FILE="$profile_file" ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $directory/run/run_$BUILD_CONFIG/etc/dirsrv/slapd-test-instance -i $directory/run/run_$BUILD_CONFIG/run/dirsrv/slapd-test-instance.pid $config_flags $FUZZ &
+        echo "LLVM_PROFILE_FILE=$profile_file ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D $config_dir -i $pid_file $config_flags $FUZZ &"
+        FUZZER_DEBUG=1 LLVM_PROFILE_FILE="$profile_file" ASAN_OPTIONS=strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1:log_path=$directory/logs/asan$BUILD_CONFIG.log:halt_on_error=0 UBSAN_OPTIONS=halt_on_error=0 LSAN_OPTIONS=detect_leaks=0 $directory/run/run_$BUILD_CONFIG/sbin/ns-slapd -D "$config_dir" -i "$pid_file" $config_flags $FUZZ &
     fi
 
     fuzzerpids+=($!)
