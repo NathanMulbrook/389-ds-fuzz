@@ -1,0 +1,21 @@
+# Enable the self-contained plugins used by stateful corpus entries.
+dn: cn=MemberOf Plugin,cn=plugins,cn=config
+changetype: modify
+replace: nsslapd-pluginEnabled
+nsslapd-pluginEnabled: on
+
+dn: cn=referential integrity postoperation,cn=plugins,cn=config
+changetype: modify
+replace: nsslapd-pluginEnabled
+nsslapd-pluginEnabled: on
+
+dn: cn=attribute uniqueness,cn=plugins,cn=config
+changetype: modify
+replace: nsslapd-pluginEnabled
+nsslapd-pluginEnabled: on
+
+# Exercise approximate index generation as well as equality and substring indexes.
+dn: cn=cn,cn=index,cn=userroot,cn=ldbm database,cn=plugins,cn=config
+changetype: modify
+add: nsIndexType
+nsIndexType: approx

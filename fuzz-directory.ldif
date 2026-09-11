@@ -1,0 +1,167 @@
+# Keep one ordinary account outside the permission groups for denied ACL paths.
+dn: uid=fuzz-user,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-user
+cn: Fuzz User
+displayName: Fuzz User
+legalName: Ordinary Fuzz User
+uidNumber: 20001
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-user
+loginShell: /bin/false
+mail: fuzz-user@example.test
+userPassword: FuzzUser-pass-01
+
+# This account is added to the sample permission groups below.
+dn: uid=fuzz-manager,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-manager
+cn: Fuzz Manager
+displayName: Fuzz Manager
+legalName: Permissioned Fuzz Manager
+uidNumber: 20002
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-manager
+loginShell: /bin/false
+mail: fuzz-manager@example.test
+userPassword: FuzzManager-pass-02
+
+# Four targets make paged and sorted searches cross page boundaries.
+dn: uid=fuzz-target-1,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-target-1
+cn: Fuzz Target One
+displayName: Fuzz Target One
+legalName: First Fuzz Target
+uidNumber: 20011
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-target-1
+loginShell: /bin/false
+mail: fuzz-target-1@example.test
+telephoneNumber: +1 555 0201
+userPassword: FuzzTarget-pass-11
+
+dn: uid=fuzz-target-2,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-target-2
+cn: Fuzz Target Two
+displayName: Fuzz Target Two
+legalName: Second Fuzz Target
+uidNumber: 20012
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-target-2
+loginShell: /bin/false
+mail: fuzz-target-2@example.test
+telephoneNumber: +1 555 0202
+userPassword: FuzzTarget-pass-12
+
+dn: uid=fuzz-target-3,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-target-3
+cn: Fuzz Target Three
+displayName: Fuzz Target Three
+legalName: Third Fuzz Target
+uidNumber: 20013
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-target-3
+loginShell: /bin/false
+mail: fuzz-target-3@example.test
+telephoneNumber: +1 555 0203
+userPassword: FuzzTarget-pass-13
+
+dn: uid=fuzz-target-4,ou=people,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: nsPerson
+objectClass: nsAccount
+objectClass: nsOrgPerson
+objectClass: posixAccount
+uid: fuzz-target-4
+cn: Fuzz Target Four
+displayName: Fuzz Target Four
+legalName: Fourth Fuzz Target
+uidNumber: 20014
+gidNumber: 20000
+homeDirectory: /var/empty/fuzz-target-4
+loginShell: /bin/false
+mail: fuzz-target-4@example.test
+telephoneNumber: +1 555 0204
+userPassword: FuzzTarget-pass-14
+
+# A two-level group graph exercises nested membership and referential updates.
+dn: cn=fuzz-inner,ou=groups,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: groupOfNames
+objectClass: nsMemberOf
+cn: fuzz-inner
+description: Inner fuzzing group
+member: uid=fuzz-user,ou=people,dc=example,dc=com
+member: uid=fuzz-target-1,ou=people,dc=example,dc=com
+
+dn: cn=fuzz-outer,ou=groups,dc=example,dc=com
+changetype: add
+objectClass: top
+objectClass: groupOfNames
+objectClass: nsMemberOf
+cn: fuzz-outer
+description: Outer fuzzing group
+member: cn=fuzz-inner,ou=groups,dc=example,dc=com
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+# Give one account every sample permission so the corpus can exercise both
+# allowed operations and denials against fuzz-user.
+dn: cn=group_admin,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+dn: cn=group_modify,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+dn: cn=user_admin,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+dn: cn=user_modify,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+dn: cn=user_passwd_reset,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
+
+dn: cn=user_private_read,ou=permissions,dc=example,dc=com
+changetype: modify
+add: member
+member: uid=fuzz-manager,ou=people,dc=example,dc=com
